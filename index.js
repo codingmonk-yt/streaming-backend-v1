@@ -17,6 +17,9 @@ app.use(morgan('dev'));
 app.use('/api/auth', require('./src/routes/auth.routes'));
 app.use('/api/secure', require('./src/routes/secure.routes'));
 app.use('/api/providers', require('./src/routes/providers.routes'));
+// Add this line with your other route imports
+app.use('/api/categories', require('./src/routes/category.routes'));
+
 // Health
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
