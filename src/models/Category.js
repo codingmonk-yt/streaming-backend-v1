@@ -20,9 +20,9 @@ const CategorySchema = new mongoose.Schema(
       trim: true,
       validate: {
         validator: function(v) {
-          return v === null || /^\d{4}$/.test(v);
+          return v === null || /^\d{1}$/.test(v);
         },
-        message: 'parent_id must be exactly 4 digits or null'
+        message: 'parent_id must be exactly 1 digits or null'
       }
     },
     provider: {

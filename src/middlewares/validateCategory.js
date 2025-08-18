@@ -23,10 +23,10 @@ function validateCreateCategory(req, res, next) {
   
   // Validate parent_id format if provided (must be 4-digit numeric)
   if (req.body.parent_id) {
-    const parentIdRegex = /^\d{4}$/;
+    const parentIdRegex = /^\d{1}$/;
     if (!parentIdRegex.test(req.body.parent_id)) {
       return res.status(400).json({ 
-        message: 'parent_id must be exactly 4 digits (e.g., 1234)' 
+        message: 'parent_id must be exactly 1 digit (e.g., 0)' 
       });
     }
   }
