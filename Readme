@@ -6,15 +6,22 @@ Auth
 
 2.POST /api/auth/login → login (super-admin via env or normal user).
 Request body:
-email: admin@example.com
-password: admin@123
+
 
 3.GET /api/secure/users → list users (super-admin only).
 
 Providers (auth required; owner-scoped)
 
 4.POST /api/providers → create provider.
-
+Request:
+{
+"name": "Core Services",
+"apiEndpoint": "https://core.example.com/api",
+"maxConcurrentUsers": 1000,
+"dns": "core.example.com",
+"status": "Active",
+"expiryHours": 240
+}
 5.GET /api/providers → list own providers (filters: status, name).
 
 6.GET /api/providers/:id → get provider by id (owned).
