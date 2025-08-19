@@ -53,13 +53,18 @@ async function bulkSyncAllXtreamCategories(req, res) {
       for (const c of cats) {
         if (!c.category_id || !/^\d+$/.test(String(c.category_id))) { stats.invalid++; continue; }
         const doc = toSchemaCategory(c, provider.name || provider._id, type);
-        const up = await Category.findOneAndUpdate(
-          { category_id: doc.category_id, provider: doc.provider, category_type: doc.category_type },
-          doc,
-          { upsert: true, setDefaultsOnInsert: true, new: true }
-        );
-        if (up.createdAt.getTime() === up.updatedAt.getTime()) stats.created++;
-        else stats.updated++;
+        try {
+          const up = await Category.findOneAndUpdate(
+            { category_id: doc.category_id, provider: doc.provider, category_type: doc.category_type },
+            doc,
+            { upsert: true, setDefaultsOnInsert: true, new: true }
+          );
+          if (up.createdAt.getTime() === up.updatedAt.getTime()) stats.created++;
+          else stats.updated++;
+        } catch (err) {
+          console.error(`Error processing category ${doc.category_id}:`, err);
+          stats.invalid++;
+        }
       }
       stats.total += cats.length;
     }
@@ -119,13 +124,18 @@ async function bulkSyncXtreamCategories(req, res) {
     for (const c of categories) {
       if (!c.category_id || !/^\d+$/.test(String(c.category_id))) { invalid++; continue; }
       const doc = toSchemaCategory(c, provider.name || provider._id, category_type);
-      const up = await Category.findOneAndUpdate(
-        { category_id: doc.category_id, provider: doc.provider, category_type: doc.category_type },
-        doc,
-        { upsert: true, setDefaultsOnInsert: true, new: true }
-      );
-      if (up.createdAt.getTime() === up.updatedAt.getTime()) created++;
-      else updated++;
+      try {
+        const up = await Category.findOneAndUpdate(
+          { category_id: doc.category_id, provider: doc.provider, category_type: doc.category_type },
+          doc,
+          { upsert: true, setDefaultsOnInsert: true, new: true }
+        );
+        if (up.createdAt.getTime() === up.updatedAt.getTime()) created++;
+        else updated++;
+      } catch (err) {
+        console.error(`Error processing category ${doc.category_id}:`, err);
+        invalid++;
+      }
     }
     return res.json({ success: true, created, updated, invalid, total: categories.length });
   } catch (e) {

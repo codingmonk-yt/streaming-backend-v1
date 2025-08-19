@@ -4,7 +4,7 @@ const CategorySchema = new mongoose.Schema({
   category_id: {
     type: String,
     required: true,
-    unique: true,
+    // Removed unique: true constraint here
     trim: true,
     match: /^\d{4}$/,
   },
@@ -24,6 +24,9 @@ const CategorySchema = new mongoose.Schema({
 
 CategorySchema.index({ provider: 1, category_type: 1 });
 CategorySchema.index({ parent_id: 1 });
-CategorySchema.index({ category_id: 1 }, { unique: true });
+CategorySchema.index(
+  { category_id: 1, provider: 1, category_type: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model('Category', CategorySchema);
