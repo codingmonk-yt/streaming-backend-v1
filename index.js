@@ -22,6 +22,11 @@ app.use('/api/categories', require('./src/routes/category.routes'));
 
 // Health
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
+app.use(cors({
+  origin: "*", // ✅ Allow all origins
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 // Boot
 const PORT = process.env.PORT;

@@ -1,35 +1,93 @@
 const router = require('express').Router();
 const { authenticate } = require('../middlewares/auth');
-const { 
-  validateCreateCategory, 
-  validateUpdateCategory, 
-  validateObjectId, 
-  validateCategoryId 
+const {
+  validateCreateCategory,
+  validateUpdateCategory,
+  validateObjectId,
+  validateCategoryId,
+  validateProviderId,
 } = require('../middlewares/validateCategory');
 const ctrl = require('../controller/category.controller');
 
-// Create category with validation
-router.post('/', authenticate, validateCreateCategory, ctrl.createCategory);
+// --- Bulk Sync for ALL categories (Live TV, VOD, Series) at once ---
+router.post(
+  '/bulk-sync-all/:providerId',
+  authenticate,
+  validateProviderId,
+  ctrl.bulkSyncAllXtreamCategories
+);
 
-// List categories (no validation needed for query params)
-router.get('/', authenticate, ctrl.listCategories);
+// --- Bulk Sync for single category type (live/vod/series) ---
+router.post(
+  '/bulk-sync/:providerId',
+  authenticate,
+  validateProviderId,
+  ctrl.bulkSyncXtreamCategories
+);
 
-// Get root categories (parent_id is null)
-router.get('/roots', authenticate, ctrl.getRootCategories);
+// --- Category CRUD Endpoints ---
 
-// Get category by category_id with validation
-router.get('/by-category-id/:category_id', authenticate, validateCategoryId, ctrl.getCategoryByCategoryId);
+// CREATE category
+router.post(
+  '/',
+  authenticate,
+  validateCreateCategory,
+  ctrl.createCategory
+);
 
-// Get category by MongoDB _id with validation
-router.get('/:id', authenticate, validateObjectId, ctrl.getCategory);
+// LIST/SEARCH categories (by providerId, category_type, etc.)
+router.get(
+  '/',
+  authenticate,
+  ctrl.listCategories
+);
 
-// Get child categories with validation
-router.get('/:id/children', authenticate, validateObjectId, ctrl.getChildCategories);
+// GET root categories (parent_id is null, filterable)
+router.get(
+  '/roots',
+  authenticate,
+  ctrl.getRootCategories
+);
 
-// Update category with validation
-router.patch('/:id', authenticate, validateObjectId, validateUpdateCategory, ctrl.updateCategory);
+// GET category by 4-digit category_id
+router.get(
+  '/by-category-id/:category_id',
+  authenticate,
+  validateCategoryId,
+  ctrl.getCategoryByCategoryId
+);
 
-// Delete category with validation
-router.delete('/:id', authenticate, validateObjectId, ctrl.deleteCategory);
+// GET category by Mongo _id
+router.get(
+  '/:id',
+  authenticate,
+  validateObjectId,
+  ctrl.getCategory
+);
+
+// GET all children for a parent
+router.get(
+  '/:id/children',
+  authenticate,
+  validateObjectId,
+  ctrl.getChildCategories
+);
+
+// UPDATE category
+router.patch(
+  '/:id',
+  authenticate,
+  validateObjectId,
+  validateUpdateCategory,
+  ctrl.updateCategory
+);
+
+// DELETE category
+router.delete(
+  '/:id',
+  authenticate,
+  validateObjectId,
+  ctrl.deleteCategory
+);
 
 module.exports = router;

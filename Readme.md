@@ -246,7 +246,7 @@ Authorization: Bearer <your_token>
 ```json
 {
   "category_name": "Updated Name",
-  "parent_id": "1234",   // or null
+  "parent_id": "1",   // or null
   "provider": "New Provider",
   "category_type": "Service"
 }
