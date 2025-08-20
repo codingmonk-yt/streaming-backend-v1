@@ -7,6 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/index.js",
     "bull": "nodemon workers/categorySync.worker.js",
+    "live": "nodemon workers/liveWorker.js",
+    "vod":"nodemon workers/vodWorker.js",
+    "series":"nodemon workers/seriesWorker.js",
     "migrate-categories": "node scripts/migrate-categories.js",
     "fix-indexes": "node scripts/fix-category-index.js"
   },

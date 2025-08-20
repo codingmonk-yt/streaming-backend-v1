@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -18,7 +19,10 @@ app.use('/api/auth', require('./src/routes/auth.routes'));
 app.use('/api/secure', require('./src/routes/secure.routes'));
 app.use('/api/providers', require('./src/routes/providers.routes'));
 // Add this line with your other route imports
+app.use('/api/vods', require('./src/routes/vod.routes'));
 app.use('/api/categories', require('./src/routes/category.routes'));
+app.use('/api/lives', require('./src/routes/live.routes'));
+app.use('/api/series', require('./src/routes/series.routes'));
 
 // Health
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
