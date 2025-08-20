@@ -27,12 +27,73 @@ async function syncAndGetVodStreams(req, res) {
 
 async function getAllSavedVodStreams(req, res) {
   try {
-    const { providerId } = req.params;
-    if (!providerId || !/^[0-9a-fA-F]{24}$/.test(providerId)) {
-      return res.status(400).json({ message: "Invalid providerId" });
+    const { providerId, search, status, category_id, page = 1, limit = 10 } = req.query;
+    
+    // Build query filters
+    const query = {};
+    
+    // Apply provider filter if provided
+    if (providerId) {
+      if (!/^[0-9a-fA-F]{24}$/.test(providerId)) {
+        return res.status(400).json({ message: "Invalid providerId format" });
+      }
+      query.provider = providerId;
     }
-    const streams = await VodStream.find({ provider: providerId });
-    res.json({ streams });
+    
+    // Apply search filter if provided
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Apply status filter if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    // Apply category filter if provided
+    if (category_id && /^[0-9a-fA-F]{24}$/.test(category_id)) {
+      query.category_id = category_id;
+    }
+    
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Get total count for pagination info
+    const totalItems = await VodStream.countDocuments(query);
+    
+    // Execute query with pagination
+    const streams = await VodStream.find(query)
+      .skip(skip)
+      .limit(limitNum)
+      .sort({ updatedAt: -1 });
+    
+    // Prepare pagination metadata
+    const totalPages = Math.ceil(totalItems / limitNum);
+    
+    // Return response with pagination info
+    res.json({
+      streams,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: pageNum,
+        pageSize: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
+      },
+      filters: {
+        search,
+        status,
+        provider: providerId,
+        category_id
+      }
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

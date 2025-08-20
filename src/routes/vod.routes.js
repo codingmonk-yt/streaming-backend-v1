@@ -8,6 +8,6 @@ const { authenticate } = require('../middlewares/auth');
 router.get('/sync/:providerId', authenticate, syncAndGetVodStreams);
 
 // GET /api/vods/:providerId => returns only database contents
-router.get('/:providerId', authenticate, getAllSavedVodStreams);
+router.get('/', authenticate, getAllSavedVodStreams);
 
 module.exports = router;
