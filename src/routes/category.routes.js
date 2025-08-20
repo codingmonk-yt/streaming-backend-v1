@@ -56,6 +56,13 @@ router.get(
   ctrl.getRootCategories
 );
 
+// GET category names and IDs by category type
+router.get(
+  '/names-by-type',
+  authenticate,
+  ctrl.getCategoryNamesByType
+);
+
 // GET category by 4-digit category_id
 router.get(
   '/by-category-id/:category_id',

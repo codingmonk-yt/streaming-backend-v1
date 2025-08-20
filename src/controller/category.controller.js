@@ -431,6 +431,45 @@ async function getRootCategories(req, res) {
   }
 }
 
+/**
+ * Get simplified list of categories (id and name only) by category type
+ * Useful for dropdowns and filters
+ */
+async function getCategoryNamesByType(req, res) {
+  try {
+    const { category_type } = req.query;
+    
+    // Validate category_type is provided
+    if (!category_type) {
+      return res.status(400).json({ message: 'category_type is required' });
+    }
+    
+    // Build query object with just the category_type
+    const query = { 
+      category_type: String(category_type).trim() 
+    };
+    
+    // Fetch only the required fields (category_id and category_name)
+    const categories = await Category.find(query)
+      .select('category_id category_name')
+      .sort({ category_name: 1 }); // Sort alphabetically
+    
+    console.log(`✅ Found ${categories.length} categories for type: ${category_type}`);
+    
+    // Return simplified array of categories
+    res.json({
+      category_type,
+      categories: categories.map(cat => ({
+        id: cat.category_id,
+        name: cat.category_name
+      })),
+    });
+  } catch (e) {
+    console.error('❌ Get category names by type error:', e);
+    res.status(500).json({ message: 'Server error', error: e.message });
+  }
+}
+
 // Get the status of a sync job by jobId
 async function getSyncJobStatus(req, res) {
   try {
@@ -484,6 +523,7 @@ module.exports = {
   deleteCategory,
   getChildCategories,
   getRootCategories,
+  getCategoryNamesByType,
   bulkSyncXtreamCategories,
   bulkSyncAllXtreamCategories,
   getSyncJobStatus,
