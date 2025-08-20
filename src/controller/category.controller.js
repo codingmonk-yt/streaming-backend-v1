@@ -413,6 +413,50 @@ async function getRootCategories(req, res) {
   }
 }
 
+// Get the status of a sync job by jobId
+async function getSyncJobStatus(req, res) {
+  try {
+    const { jobId } = req.params;
+    
+    if (!jobId) {
+      return res.status(400).json({ message: 'Job ID is required' });
+    }
+    
+    console.log('🔍 Checking sync job status for job:', jobId);
+    
+    // Get the job from the queue
+    const job = await syncQueue.getJob(jobId);
+    
+    if (!job) {
+      console.log('❌ Sync job not found:', jobId);
+      return res.status(404).json({ message: 'Sync job not found' });
+    }
+    
+    // Get job state and other relevant info
+    const state = await job.getState();
+    const progress = job.progress || 0;
+    const result = job.returnvalue;
+    const failReason = job.failedReason;
+    
+    console.log(`✅ Sync job ${jobId} status:`, { state, progress });
+    
+    return res.json({
+      jobId,
+      state,
+      progress,
+      result,
+      failReason,
+      timestamp: Date.now()
+    });
+  } catch (e) {
+    console.error('❌ getSyncJobStatus error:', e);
+    res.status(500).json({ 
+      message: 'Failed to get sync job status', 
+      error: e.message 
+    });
+  }
+}
+
 module.exports = {
   createCategory,
   listCategories,
@@ -424,4 +468,5 @@ module.exports = {
   getRootCategories,
   bulkSyncXtreamCategories,
   bulkSyncAllXtreamCategories,
+  getSyncJobStatus,
 };

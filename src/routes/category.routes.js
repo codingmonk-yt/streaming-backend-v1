@@ -25,6 +25,13 @@ router.post(
   ctrl.bulkSyncXtreamCategories
 );
 
+// --- Get sync job status ---
+router.get(
+  '/sync-status/:jobId',
+  authenticate,
+  ctrl.getSyncJobStatus
+);
+
 // --- Category CRUD Endpoints ---
 
 // CREATE category
