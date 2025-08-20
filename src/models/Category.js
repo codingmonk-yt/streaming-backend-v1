@@ -18,8 +18,13 @@ const CategorySchema = new mongoose.Schema({
       message: 'parent_id must be exactly 1 digit or null'
     }
   },
-  provider: { type: String, required: true, trim: true },
-  category_type: { type: String, required: true, trim: true }
+  provider: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Provider',
+    required: true
+  },
+  category_type: { type: String, required: true, trim: true },
+  blacklisted: { type: Boolean, default: false }
 }, { timestamps: true });
 
 CategorySchema.index({ provider: 1, category_type: 1 });

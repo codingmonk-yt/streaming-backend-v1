@@ -1,17 +1,19 @@
 const { Worker } = require('bullmq');
+const mongoose = require('mongoose');
 const Category = require('../models/Category');
+const Provider = require('../models/Provider');
 const { connection } = require('../config/queue');
 
 // Configuration for batch processing
 const BATCH_SIZE = 100; // Number of categories to process in one batch
 
 // Helper function: Transform external API category to schema
-function toSchemaCategory(raw, provider, type) {
+function toSchemaCategory(raw, providerId, type) {
   return {
     category_id: String(raw.category_id).padStart(4, '0'),
     category_name: (raw.category_name || '').trim(),
     parent_id: null,
-    provider: String(provider),
+    provider: providerId, // Use ObjectId reference
     category_type: String(type)
   };
 }
@@ -19,17 +21,18 @@ function toSchemaCategory(raw, provider, type) {
 /**
  * Process a batch of categories with bulkWrite
  * @param {Array} batch Array of category data to process
- * @param {String} provider The provider name
+ * @param {mongoose.Types.ObjectId} providerId The provider ID
  * @param {String} categoryType The category type
+ * @param {Array} blacklistedCategories Array of blacklisted category IDs
  * @returns {Object} Processing results
  */
-async function processCategoryBatch(batch, provider, categoryType) {
+async function processCategoryBatch(batch, providerId, categoryType, blacklistedCategories = []) {
   if (!batch || !batch.length) {
-    return { created: 0, updated: 0, invalid: 0 };
+    return { created: 0, updated: 0, invalid: 0, blacklisted: 0 };
   }
 
   // Results counters
-  const results = { created: 0, updated: 0, invalid: 0 };
+  const results = { created: 0, updated: 0, invalid: 0, blacklisted: 0 };
   
   // Prepare operations for bulkWrite
   const bulkOps = [];
@@ -41,8 +44,16 @@ async function processCategoryBatch(batch, provider, categoryType) {
       results.invalid++;
       continue;
     }
+    
+    // Check if category is blacklisted
+    const categoryId = String(cat.category_id).padStart(4, '0');
+    if (blacklistedCategories.includes(categoryId)) {
+      console.log(`Skipping blacklisted category: ${categoryId} - ${cat.category_name}`);
+      results.blacklisted++;
+      continue;
+    }
 
-    const doc = toSchemaCategory(cat, provider, categoryType);
+    const doc = toSchemaCategory(cat, providerId, categoryType);
     
     // Add to bulk operations
     bulkOps.push({
@@ -68,7 +79,7 @@ async function processCategoryBatch(batch, provider, categoryType) {
       results.created += bulkResult.upsertedCount || 0;
       results.updated += bulkResult.modifiedCount || 0;
       
-      console.log(`Batch processed: ${bulkOps.length} operations, ${results.created} created, ${results.updated} updated`);
+      console.log(`Batch processed: ${bulkOps.length} operations, ${results.created} created, ${results.updated} updated, ${results.blacklisted} blacklisted`);
     } catch (error) {
       // If it's a BulkWriteError, some operations might have succeeded
       if (error.name === 'BulkWriteError') {
@@ -100,12 +111,38 @@ const categoryWorker = new Worker('category-sync', async job => {
   console.log(`Processing job ${job.id} of type ${job.name}`);
   
   try {
-    const { providerId, providerName, dns, username, password } = job.data;
+    const { providerId } = job.data;
+    
+    // Validate providerId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(providerId)) {
+      throw new Error(`Invalid provider ID: ${providerId}`);
+    }
+    
+    // Fetch provider details
+    const provider = await Provider.findById(providerId);
+    if (!provider) {
+      throw new Error(`Provider not found: ${providerId}`);
+    }
+    
+    const { dns, username, password } = provider;
+    
+    // In the future, you would fetch blacklisted categories from database
+    // For now, initialize empty blacklisted categories array
+    // This would typically come from a provider setting or separate collection
+    const blacklistedCategories = [];
+    
+    // Optionally: Fetch existing blacklisted categories from database
+    // Example implementation (commented out until implemented):
+    // const blacklistedCategoriesFromDB = await Category.find({ 
+    //   provider: providerId, 
+    //   blacklisted: true 
+    // }).select('category_id');
+    // blacklistedCategories.push(...blacklistedCategoriesFromDB.map(cat => cat.category_id));
     
     const stats = {
-      'Live TV': { created: 0, updated: 0, invalid: 0, total: 0 },
-      'VOD': { created: 0, updated: 0, invalid: 0, total: 0 },
-      'Series': { created: 0, updated: 0, invalid: 0, total: 0 }
+      'Live TV': { created: 0, updated: 0, invalid: 0, blacklisted: 0, total: 0 },
+      'VOD': { created: 0, updated: 0, invalid: 0, blacklisted: 0, total: 0 },
+      'Series': { created: 0, updated: 0, invalid: 0, blacklisted: 0, total: 0 }
     };
     
     // Helper to fetch & sync one type
@@ -138,12 +175,13 @@ const categoryWorker = new Worker('category-sync', async job => {
         });
         
         // Process the batch
-        const batchResults = await processCategoryBatch(batch, providerName, type);
+        const batchResults = await processCategoryBatch(batch, providerId, type, blacklistedCategories);
         
         // Update stats
         stats[type].created += batchResults.created;
         stats[type].updated += batchResults.updated;
         stats[type].invalid += batchResults.invalid;
+        stats[type].blacklisted += batchResults.blacklisted;
         
         processedCount += batch.length;
         
@@ -177,6 +215,7 @@ const categoryWorker = new Worker('category-sync', async job => {
     const totalCreated = Object.values(stats).reduce((sum, s) => sum + s.created, 0);
     const totalUpdated = Object.values(stats).reduce((sum, s) => sum + s.updated, 0);
     const totalInvalid = Object.values(stats).reduce((sum, s) => sum + s.invalid, 0);
+    const totalBlacklisted = Object.values(stats).reduce((sum, s) => sum + s.blacklisted, 0);
     
     const result = { 
       success: successCount > 0,
@@ -187,7 +226,8 @@ const categoryWorker = new Worker('category-sync', async job => {
         totalCreated,
         totalUpdated,
         totalInvalid,
-        totalProcessed: totalCreated + totalUpdated + totalInvalid
+        totalBlacklisted,
+        totalProcessed: totalCreated + totalUpdated + totalInvalid + totalBlacklisted
       },
       completedAt: new Date().toISOString()
     };

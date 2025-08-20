@@ -13,17 +13,6 @@ async function generateUniqueCategoryId() {
   return categoryId;
 }
 
-// Utility: Transform external API category to schema
-function toSchemaCategory(raw, provider, type) {
-  return {
-    category_id: String(raw.category_id).padStart(4, '0'),
-    category_name: (raw.category_name || '').trim(),
-    parent_id: null,
-    provider: String(provider),
-    category_type: String(type)
-  };
-}
-
 // BULK SYNC - Enqueues a BullMQ job for all categories
 async function bulkSyncAllXtreamCategories(req, res) {
   try {
@@ -156,11 +145,14 @@ async function createCategory(req, res) {
     }
     
     // Validate provider exists if provided
+    let providerDoc = null;
     if (provider && mongoose.Types.ObjectId.isValid(provider)) {
-      const providerExists = await Provider.findById(provider);
-      if (!providerExists) {
+      providerDoc = await Provider.findById(provider);
+      if (!providerDoc) {
         return res.status(400).json({ message: 'Provider not found' });
       }
+    } else {
+      return res.status(400).json({ message: 'Invalid provider ID format' });
     }
     
     const finalCategoryId = category_id || await generateUniqueCategoryId();
@@ -168,7 +160,8 @@ async function createCategory(req, res) {
       category_id: finalCategoryId,
       category_name: String(category_name).trim(),
       parent_id: parent_id || null,
-      provider: String(provider).trim(),
+      provider: providerDoc._id, // Use the ObjectId reference
+      provider_name: providerDoc.name, // Store the provider name for easier access
       category_type: String(category_type).trim(),
     };
     
@@ -192,7 +185,15 @@ async function listCategories(req, res) {
     const { provider, category_type, parent_id, category_name, page = 1, limit = 100 } = req.query || {};
     
     const query = {};
-    if (provider) query.provider = String(provider).trim();
+    if (provider) {
+      // Check if it's a valid ObjectId
+      if (mongoose.Types.ObjectId.isValid(provider)) {
+        query.provider = mongoose.Types.ObjectId(provider);
+      } else {
+        // If not a valid ObjectId, try to find by provider_name
+        query.provider_name = { $regex: String(provider).trim(), $options: 'i' };
+      }
+    }
     if (category_type) query.category_type = String(category_type).trim();
     if (parent_id !== undefined) {
       query.parent_id = parent_id ? String(parent_id).trim() : null;
@@ -205,7 +206,8 @@ async function listCategories(req, res) {
     const categories = await Category.find(query)
       .sort({ category_id: 1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .populate('provider', 'name status'); // Populate provider details
     
     const total = await Category.countDocuments(query);
     
@@ -279,21 +281,28 @@ async function updateCategory(req, res) {
       if (key in req.body) {
         if (key === 'parent_id') {
           updates[key] = req.body[key] || null;
-        } else {
+        } else if (key !== 'provider') { // Handle provider separately
           updates[key] = String(req.body[key]).trim();
         }
       }
     }
     
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && !req.body.provider) {
       return res.status(400).json({ message: 'No valid fields to update' });
     }
     
     // Validate provider if being updated
-    if (updates.provider && mongoose.Types.ObjectId.isValid(updates.provider)) {
-      const providerExists = await Provider.findById(updates.provider);
-      if (!providerExists) {
-        return res.status(400).json({ message: 'Provider not found' });
+    if (req.body.provider) {
+      if (mongoose.Types.ObjectId.isValid(req.body.provider)) {
+        const providerDoc = await Provider.findById(req.body.provider);
+        if (!providerDoc) {
+          return res.status(400).json({ message: 'Provider not found' });
+        }
+        // Update provider fields
+        updates.provider = providerDoc._id;
+        updates.provider_name = providerDoc.name;
+      } else {
+        return res.status(400).json({ message: 'Invalid provider ID format' });
       }
     }
     
@@ -387,14 +396,23 @@ async function getRootCategories(req, res) {
     const { provider, category_type, page = 1, limit = 100 } = req.query || {};
     
     const query = { parent_id: null };
-    if (provider) query.provider = String(provider).trim();
+    if (provider) {
+      // Check if it's a valid ObjectId
+      if (mongoose.Types.ObjectId.isValid(provider)) {
+        query.provider = mongoose.Types.ObjectId(provider);
+      } else {
+        // If not a valid ObjectId, try to find by provider_name
+        query.provider_name = { $regex: String(provider).trim(), $options: 'i' };
+      }
+    }
     if (category_type) query.category_type = String(category_type).trim();
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const rootCategories = await Category.find(query)
       .sort({ category_id: 1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .populate('provider', 'name status'); // Populate provider details
     
     const total = await Category.countDocuments(query);
     

@@ -38,7 +38,7 @@ const connection = new IORedis(process.env.REDIS_URL, {
 });
 
 // Enhanced category conversion with validation
-function toSchemaCategory(raw, providerId, type) {
+function toSchemaCategory(raw, providerId, providerName, type) {
   if (!raw || typeof raw !== 'object') {
     throw new Error(`Invalid category data: ${JSON.stringify(raw)}`);
   }
@@ -52,7 +52,8 @@ function toSchemaCategory(raw, providerId, type) {
     category_id: String(raw.category_id).padStart(4, '0'),
     category_name: (raw.category_name || '').trim(),
     parent_id: null,
-    provider: String(providerId),
+    provider: providerId, // Use ObjectId reference
+    provider_name: providerName, // Store provider name
     category_type: String(type)
   };
 }
@@ -208,6 +209,7 @@ async function processCategoryBatch(categories, provider, type, stats) {
       stats.invalid++;
       return false;
     }
+    
     return true;
   });
   
@@ -233,20 +235,15 @@ async function processCategoryBatch(categories, provider, type, stats) {
   // Step 2: Prepare bulk operations
   const bulkOperations = validCategories.map(rawCategory => {
     try {
-      const doc = {
-        category_id: String(rawCategory.category_id).padStart(4, '0'),
-        category_name: (rawCategory.category_name || '').trim(),
-        parent_id: null,
-        provider: String(provider._id),
-        category_type: String(type)
-      };
+      const doc = toSchemaCategory(rawCategory, provider._id, provider.name, type);
       
       const existing = existingCategoryMap[doc.category_id];
       
       // If this category already exists
       if (existing) {
         // Check if anything actually changed
-        if (existing.category_name !== doc.category_name) {
+        if (existing.category_name !== doc.category_name || 
+            existing.provider_name !== doc.provider_name) {
           stats.updated++;
           return {
             updateOne: {
