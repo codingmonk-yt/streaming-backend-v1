@@ -28,7 +28,7 @@ async function syncAndGetVodStreams(req, res) {
 // Paginated, filtered VOD from DB
 async function getAllSavedVodStreams(req, res) {
   try {
-    const { providerId, search, status, category_id, hide, favorite, page = 1, limit = 10 } = req.query;
+    const { providerId, search, status, category_id, hide, feature, page = 1, limit = 10 } = req.query;
     const query = {};
 
     if (providerId) {
@@ -45,7 +45,7 @@ async function getAllSavedVodStreams(req, res) {
     }
     if (status) query.status = status;
     if (hide !== undefined) query.hide = hide === 'true';
-    if (favorite !== undefined) query.favorite = favorite === 'true';
+    if (feature !== undefined) query.feature = feature === 'true';
     if (category_id) query.category_id = category_id;
 
     const pageNum = parseInt(page);
@@ -76,7 +76,7 @@ async function getAllSavedVodStreams(req, res) {
         provider: providerId,
         category_id,
         hide,
-        favorite
+        feature
       }
     });
   } catch (e) {
@@ -84,14 +84,14 @@ async function getAllSavedVodStreams(req, res) {
   }
 }
 
-// Set/unset favorite
-async function setVodFavorite(req, res) {
+// Set/unset feature
+async function setVodFeature(req, res) {
   try {
     const { id } = req.params;
-    const { favorite } = req.body;
-    const updated = await VodStream.findByIdAndUpdate(id, { favorite: !!favorite }, { new: true });
+    const { feature } = req.body;
+    const updated = await VodStream.findByIdAndUpdate(id, { feature: !!feature }, { new: true });
     if (!updated) return res.status(404).json({ message: "VOD not found" });
-    res.json({ message: "Favorite updated", vod: updated });
+    res.json({ message: "Feature updated", vod: updated });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -113,6 +113,6 @@ async function setVodHide(req, res) {
 module.exports = {
   syncAndGetVodStreams,
   getAllSavedVodStreams,
-  setVodFavorite,
+  setVodFeature,
   setVodHide
 };

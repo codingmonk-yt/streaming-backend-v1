@@ -2,7 +2,7 @@ const express = require('express');
 const {
   syncAndGetVodStreams,
   getAllSavedVodStreams,
-  setVodFavorite,
+  setVodFeature,
   setVodHide
 } = require('../controller/vod.controller');
 const router = express.Router();
@@ -14,8 +14,8 @@ router.get('/sync/:providerId', authenticate, syncAndGetVodStreams);
 // Get all (with pagination/filter support)
 router.get('/', authenticate, getAllSavedVodStreams);
 
-// Set/unset favorite by stream (PATCH recommended for partial update)
-router.patch('/favorite/:id', authenticate, setVodFavorite);
+// Set/unset feature by stream (PATCH recommended for partial update)
+router.patch('/feature/:id', authenticate, setVodFeature);
 
 // Set/unset hide by stream
 router.patch('/hide/:id', authenticate, setVodHide);

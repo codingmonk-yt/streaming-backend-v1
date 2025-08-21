@@ -2,7 +2,7 @@ const express = require('express');
 const {
   syncAndGetSeriesStreams,
   getAllSavedSeriesStreams,
-  setSeriesFavorite,
+  setSeriesFeature,
   setSeriesHide
 } = require('../controller/series.controller');
 const router = express.Router();
@@ -14,8 +14,8 @@ router.get('/sync/:providerId', authenticate, syncAndGetSeriesStreams);
 // GET all paginated/filter series
 router.get('/', authenticate, getAllSavedSeriesStreams);
 
-// Set/unset favorite
-router.patch('/favorite/:id', authenticate, setSeriesFavorite);
+// Set/unset feature
+router.patch('/feature/:id', authenticate, setSeriesFeature);
 
 // Set/unset hide
 router.patch('/hide/:id', authenticate, setSeriesHide);

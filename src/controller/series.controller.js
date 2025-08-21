@@ -39,7 +39,7 @@ async function getAllSavedSeriesStreams(req, res) {
     if (status && ['ACTIVE', 'INACTIVE'].includes(status.toUpperCase())) filter.status = status.toUpperCase();
     if (category_id) filter.category_id = category_id;
     if (hide !== undefined) filter.hide = hide === 'true';
-    if (favorite !== undefined) filter.favorite = favorite === 'true';
+    if (favorite !== undefined) filter.feature = favorite === 'true';
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -77,14 +77,14 @@ async function getAllSavedSeriesStreams(req, res) {
   }
 }
 
-// Set/unset favorite
-async function setSeriesFavorite(req, res) {
+// Set/unset feature
+async function setSeriesFeature(req, res) {
   try {
     const { id } = req.params;
-    const { favorite } = req.body;
-    const updated = await SeriesStream.findByIdAndUpdate(id, { favorite: !!favorite }, { new: true });
+    const { feature } = req.body;
+    const updated = await SeriesStream.findByIdAndUpdate(id, { feature: !!feature }, { new: true });
     if (!updated) return res.status(404).json({ message: "Series not found" });
-    res.json({ message: "Favorite updated", series: updated });
+    res.json({ message: "Feature updated", series: updated });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -106,6 +106,6 @@ async function setSeriesHide(req, res) {
 module.exports = {
   syncAndGetSeriesStreams,
   getAllSavedSeriesStreams,
-  setSeriesFavorite,
+  setSeriesFeature,
   setSeriesHide
 };

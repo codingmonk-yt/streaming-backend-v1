@@ -34,7 +34,7 @@ async function getAllSavedLiveStreams(req, res) {
     if (category_id) query.category_id = category_id;
     if (status) query.status = status.toUpperCase();
     if (hide !== undefined) query.hide = hide === 'true';
-    if (favorite !== undefined) query.favorite = favorite === 'true';
+    if (favorite !== undefined) query.feature = favorite === 'true';
 
     if (search) {
       const regex = new RegExp(search, 'i');
@@ -74,14 +74,14 @@ async function getAllSavedLiveStreams(req, res) {
   }
 }
 
-// PATCH to set/unset favorite
-async function setLiveFavorite(req, res) {
+// PATCH to set/unset feature
+async function setLiveFeature(req, res) {
   try {
     const { id } = req.params;
-    const { favorite } = req.body;
-    const updated = await LiveStream.findByIdAndUpdate(id, { favorite: !!favorite }, { new: true });
+    const { feature } = req.body;
+    const updated = await LiveStream.findByIdAndUpdate(id, { feature: !!feature }, { new: true });
     if (!updated) return res.status(404).json({ message: "Live stream not found" });
-    res.json({ message: "Favorite updated", stream: updated });
+    res.json({ message: "Feature updated", stream: updated });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -103,6 +103,6 @@ async function setLiveHide(req, res) {
 module.exports = {
   syncAndGetLiveStreams,
   getAllSavedLiveStreams,
-  setLiveFavorite,
+  setLiveFeature,
   setLiveHide
 };
