@@ -16,8 +16,7 @@ const LiveStreamSchema = new mongoose.Schema({
   category_id: String,
   category_ids: [Number],
   thumbnail: String,
-  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true },
-  hide: { type: Boolean, default: false, index: true },
+  status: { type: String, enum: ['ACTIVE', 'INACTIVE', 'HIDDEN'], default: 'ACTIVE', index: true },
   feature: { type: Boolean, default: false, index: true }
 }, { timestamps: true });
 

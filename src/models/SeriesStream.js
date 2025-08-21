@@ -23,8 +23,7 @@ const SeriesStreamSchema = new mongoose.Schema({
   episode_run_time: String,
   category_id: { type: String, index: true },
   category_ids: [Number],
-  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true },
-  hide: { type: Boolean, default: false, index: true },
+  status: { type: String, enum: ['ACTIVE', 'INACTIVE', 'HIDDEN'], default: 'ACTIVE', index: true },
   feature: { type: Boolean, default: false, index: true }
 }, { timestamps: true });
 

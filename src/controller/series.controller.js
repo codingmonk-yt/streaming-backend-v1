@@ -36,10 +36,16 @@ async function getAllSavedSeriesStreams(req, res) {
         { title: { $regex: search, $options: 'i' } }
       ];
     }
-    if (status && ['ACTIVE', 'INACTIVE'].includes(status.toUpperCase())) filter.status = status.toUpperCase();
+    if (status && ['ACTIVE', 'INACTIVE', 'HIDDEN'].includes(status.toUpperCase())) filter.status = status.toUpperCase();
     if (category_id) filter.category_id = category_id;
-    if (hide !== undefined) filter.hide = hide === 'true';
     if (favorite !== undefined) filter.feature = favorite === 'true';
+
+    // Hide logic replaced: if hide=true, filter status HIDDEN; if hide=false, exclude HIDDEN
+    if (hide === 'true') {
+      filter.status = 'HIDDEN';
+    } else if (hide === 'false') {
+      filter.status = { $ne: 'HIDDEN' };
+    }
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -90,12 +96,14 @@ async function setSeriesFeature(req, res) {
   }
 }
 
-// Set/unset hide
+
+// Set/unset hidden status
 async function setSeriesHide(req, res) {
   try {
     const { id } = req.params;
     const { hide } = req.body;
-    const updated = await SeriesStream.findByIdAndUpdate(id, { hide: !!hide }, { new: true });
+    const newStatus = hide ? 'HIDDEN' : 'ACTIVE';
+    const updated = await SeriesStream.findByIdAndUpdate(id, { status: newStatus }, { new: true });
     if (!updated) return res.status(404).json({ message: "Series not found" });
     res.json({ message: "Hide updated", series: updated });
   } catch (e) {

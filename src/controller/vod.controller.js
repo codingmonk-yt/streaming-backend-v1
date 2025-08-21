@@ -44,9 +44,15 @@ async function getAllSavedVodStreams(req, res) {
       ];
     }
     if (status) query.status = status;
-    if (hide !== undefined) query.hide = hide === 'true';
     if (feature !== undefined) query.feature = feature === 'true';
     if (category_id) query.category_id = category_id;
+
+    // Hide logic replaced: if hide=true, filter status HIDDEN; if hide=false, exclude HIDDEN
+    if (hide === 'true') {
+      query.status = 'HIDDEN';
+    } else if (hide === 'false') {
+      query.status = { $ne: 'HIDDEN' };
+    }
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -97,12 +103,14 @@ async function setVodFeature(req, res) {
   }
 }
 
-// Set/unset hide
+
+// Set/unset hidden status
 async function setVodHide(req, res) {
   try {
     const { id } = req.params;
     const { hide } = req.body;
-    const updated = await VodStream.findByIdAndUpdate(id, { hide: !!hide }, { new: true });
+    const newStatus = hide ? 'HIDDEN' : 'ACTIVE';
+    const updated = await VodStream.findByIdAndUpdate(id, { status: newStatus }, { new: true });
     if (!updated) return res.status(404).json({ message: "VOD not found" });
     res.json({ message: "Hide updated", vod: updated });
   } catch (e) {

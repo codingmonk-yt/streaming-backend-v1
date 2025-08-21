@@ -27,14 +27,20 @@ async function syncAndGetLiveStreams(req, res) {
 // Filtered, paginated DB fetch
 async function getAllSavedLiveStreams(req, res) {
   try {
-    const { search, category_id, provider, status, hide, favorite, page = 1, limit = 10 } = req.query;
+    const { search, category_id, provider, status, favorite, page = 1, limit = 10 } = req.query;
     const query = {};
 
     if (provider && /^[0-9a-fA-F]{24}$/.test(provider)) query.provider = provider;
     if (category_id) query.category_id = category_id;
     if (status) query.status = status.toUpperCase();
-    if (hide !== undefined) query.hide = hide === 'true';
     if (favorite !== undefined) query.feature = favorite === 'true';
+
+    // Hide logic replaced: if hide=true, filter status HIDDEN; if hide=false, exclude HIDDEN
+    if (req.query.hide === 'true') {
+      query.status = 'HIDDEN';
+    } else if (req.query.hide === 'false') {
+      query.status = { $ne: 'HIDDEN' };
+    }
 
     if (search) {
       const regex = new RegExp(search, 'i');
@@ -66,7 +72,7 @@ async function getAllSavedLiveStreams(req, res) {
         hasPreviousPage: pageNum > 1
       },
       filters: {
-        search, category_id, provider, status, hide, favorite
+        search, category_id, provider, status, hide: req.query.hide, favorite
       }
     });
   } catch (e) {
@@ -87,12 +93,14 @@ async function setLiveFeature(req, res) {
   }
 }
 
-// PATCH to set/unset hide
+
+// PATCH to set/unset hidden status
 async function setLiveHide(req, res) {
   try {
     const { id } = req.params;
     const { hide } = req.body;
-    const updated = await LiveStream.findByIdAndUpdate(id, { hide: !!hide }, { new: true });
+    const newStatus = hide ? 'HIDDEN' : 'ACTIVE';
+    const updated = await LiveStream.findByIdAndUpdate(id, { status: newStatus }, { new: true });
     if (!updated) return res.status(404).json({ message: "Live stream not found" });
     res.json({ message: "Hide updated", stream: updated });
   } catch (e) {
