@@ -23,6 +23,7 @@ app.use('/api/vods', require('./src/routes/vod.routes'));
 app.use('/api/categories', require('./src/routes/category.routes'));
 app.use('/api/lives', require('./src/routes/live.routes'));
 app.use('/api/series', require('./src/routes/series.routes'));
+app.use('/api/sections', require('./src/routes/section.routes'));
 
 // Health
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
