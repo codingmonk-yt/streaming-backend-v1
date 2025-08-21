@@ -2,6 +2,7 @@ const VodStream = require('../models/VodStream');
 const Provider = require('../models/Provider');
 const { vodQueue } = require('../bull/vodQueue');
 
+// Trigger sync and return VOD from DB after upsert
 async function syncAndGetVodStreams(req, res) {
   try {
     const { providerId } = req.params;
@@ -14,7 +15,6 @@ async function syncAndGetVodStreams(req, res) {
 
     // Enqueue BullMQ job
     const job = await vodQueue.add('vodSync', { providerId });
-    // Wait for job to finish (demo: 1500ms)
     setTimeout(async () => {
       const streams = await VodStream.find({ provider: providerId });
       res.json({ jobId: job.id, streams });
@@ -25,58 +25,41 @@ async function syncAndGetVodStreams(req, res) {
   }
 }
 
+// Paginated, filtered VOD from DB
 async function getAllSavedVodStreams(req, res) {
   try {
-    const { providerId, search, status, category_id, page = 1, limit = 10 } = req.query;
-    
-    // Build query filters
+    const { providerId, search, status, category_id, hide, favorite, page = 1, limit = 10 } = req.query;
     const query = {};
-    
-    // Apply provider filter if provided
+
     if (providerId) {
       if (!/^[0-9a-fA-F]{24}$/.test(providerId)) {
         return res.status(400).json({ message: "Invalid providerId format" });
       }
       query.provider = providerId;
     }
-    
-    // Apply search filter if provided
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: 'i' } }
       ];
     }
-    
-    // Apply status filter if provided
-    if (status) {
-      query.status = status;
-    }
-    
-    // Apply category filter if provided
-    if (category_id && /^[0-9a-fA-F]{24}$/.test(category_id)) {
-      query.category_id = category_id;
-    }
-    
-    // Calculate pagination
+    if (status) query.status = status;
+    if (hide !== undefined) query.hide = hide === 'true';
+    if (favorite !== undefined) query.favorite = favorite === 'true';
+    if (category_id) query.category_id = category_id;
+
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
-    
-    // Get total count for pagination info
+
     const totalItems = await VodStream.countDocuments(query);
-    
-    // Execute query with pagination
     const streams = await VodStream.find(query)
       .skip(skip)
       .limit(limitNum)
       .sort({ updatedAt: -1 });
-    
-    // Prepare pagination metadata
+
     const totalPages = Math.ceil(totalItems / limitNum);
-    
-    // Return response with pagination info
+
     res.json({
       streams,
       pagination: {
@@ -91,7 +74,9 @@ async function getAllSavedVodStreams(req, res) {
         search,
         status,
         provider: providerId,
-        category_id
+        category_id,
+        hide,
+        favorite
       }
     });
   } catch (e) {
@@ -99,4 +84,35 @@ async function getAllSavedVodStreams(req, res) {
   }
 }
 
-module.exports = { syncAndGetVodStreams, getAllSavedVodStreams };
+// Set/unset favorite
+async function setVodFavorite(req, res) {
+  try {
+    const { id } = req.params;
+    const { favorite } = req.body;
+    const updated = await VodStream.findByIdAndUpdate(id, { favorite: !!favorite }, { new: true });
+    if (!updated) return res.status(404).json({ message: "VOD not found" });
+    res.json({ message: "Favorite updated", vod: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// Set/unset hide
+async function setVodHide(req, res) {
+  try {
+    const { id } = req.params;
+    const { hide } = req.body;
+    const updated = await VodStream.findByIdAndUpdate(id, { hide: !!hide }, { new: true });
+    if (!updated) return res.status(404).json({ message: "VOD not found" });
+    res.json({ message: "Hide updated", vod: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+module.exports = {
+  syncAndGetVodStreams,
+  getAllSavedVodStreams,
+  setVodFavorite,
+  setVodHide
+};

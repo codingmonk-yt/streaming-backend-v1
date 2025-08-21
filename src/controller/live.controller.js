@@ -2,22 +2,19 @@ const LiveStream = require('../models/LiveStream');
 const Provider = require('../models/Provider');
 const { liveQueue } = require('../bull/liveQueue');
 
-// POST/GET route: Enqueue sync job for given provider
+// Sync and fetch
 async function syncAndGetLiveStreams(req, res) {
   try {
     const { providerId } = req.params;
     if (!providerId || !/^[0-9a-fA-F]{24}$/.test(providerId)) {
       return res.status(400).json({ message: "Invalid providerId" });
     }
-
     const provider = await Provider.findById(providerId);
     if (!provider) return res.status(404).json({ message: "Provider not found" });
 
-    // 1. Enqueue BullMQ job
+    // Queue job
     const job = await liveQueue.add('liveSync', { providerId });
-    // 2. Wait for job completion or short pause (for demo, 1.5s)
     setTimeout(async () => {
-      // 3. Fetch filtered, saved live streams from DB
       const streams = await LiveStream.find({ provider: providerId });
       res.json({ jobId: job.id, streams });
     }, 1500);
@@ -27,71 +24,37 @@ async function syncAndGetLiveStreams(req, res) {
   }
 }
 
-// Standard route to fetch all saved live streams with optional filtering and pagination
+// Filtered, paginated DB fetch
 async function getAllSavedLiveStreams(req, res) {
   try {
-    // Get query parameters
-    const { 
-      search, 
-      category_id, 
-      provider, 
-      status,
-      page = 1, 
-      limit = 10 
-    } = req.query;
-
-    // Build query object
+    const { search, category_id, provider, status, hide, favorite, page = 1, limit = 10 } = req.query;
     const query = {};
 
-    // Add filters if they exist
-    if (provider) {
-      if (!/^[0-9a-fA-F]{24}$/.test(provider)) {
-        return res.status(400).json({ message: "Invalid provider ID format" });
-      }
-      query.provider = provider;
-    }
+    if (provider && /^[0-9a-fA-F]{24}$/.test(provider)) query.provider = provider;
+    if (category_id) query.category_id = category_id;
+    if (status) query.status = status.toUpperCase();
+    if (hide !== undefined) query.hide = hide === 'true';
+    if (favorite !== undefined) query.favorite = favorite === 'true';
 
-    if (category_id) {
-      if (!/^[0-9a-fA-F]{24}$/.test(category_id)) {
-        return res.status(400).json({ message: "Invalid category ID format" });
-      }
-      query.category_id = category_id;
-    }
-
-    if (status) {
-      query.status = status.toUpperCase();
-    }
-
-    // Add search functionality if search parameter exists
     if (search) {
-      const searchRegex = new RegExp(search, 'i');
+      const regex = new RegExp(search, 'i');
       query.$or = [
-        { name: searchRegex },
-        { title: searchRegex },
-        { description: searchRegex }
+        { name: regex },
+        { title: regex }
       ];
     }
 
-    // Parse page and limit to numbers
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-
-    // Calculate skip value for pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Execute the count query for total items
     const totalItems = await LiveStream.countDocuments(query);
-
-    // Calculate total pages
-    const totalPages = Math.ceil(totalItems / limitNum);
-
-    // Get streams with pagination
     const streams = await LiveStream.find(query)
       .skip(skip)
       .limit(limitNum)
-      .sort({ updatedAt: -1 }); // Sort by updatedAt desc by default
+      .sort({ updatedAt: -1 });
 
-    // Return data with pagination info
+    const totalPages = Math.ceil(totalItems / limitNum);
     res.json({
       streams,
       pagination: {
@@ -103,18 +66,43 @@ async function getAllSavedLiveStreams(req, res) {
         hasPreviousPage: pageNum > 1
       },
       filters: {
-        search,
-        category_id,
-        provider,
-        status,
-        page: pageNum,
-        limit: limitNum
+        search, category_id, provider, status, hide, favorite
       }
     });
   } catch (e) {
-    console.error('Error in getAllSavedLiveStreams:', e);
     res.status(500).json({ message: "Server error", error: e.message });
   }
 }
 
-module.exports = { syncAndGetLiveStreams, getAllSavedLiveStreams };
+// PATCH to set/unset favorite
+async function setLiveFavorite(req, res) {
+  try {
+    const { id } = req.params;
+    const { favorite } = req.body;
+    const updated = await LiveStream.findByIdAndUpdate(id, { favorite: !!favorite }, { new: true });
+    if (!updated) return res.status(404).json({ message: "Live stream not found" });
+    res.json({ message: "Favorite updated", stream: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// PATCH to set/unset hide
+async function setLiveHide(req, res) {
+  try {
+    const { id } = req.params;
+    const { hide } = req.body;
+    const updated = await LiveStream.findByIdAndUpdate(id, { hide: !!hide }, { new: true });
+    if (!updated) return res.status(404).json({ message: "Live stream not found" });
+    res.json({ message: "Hide updated", stream: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+module.exports = {
+  syncAndGetLiveStreams,
+  getAllSavedLiveStreams,
+  setLiveFavorite,
+  setLiveHide
+};

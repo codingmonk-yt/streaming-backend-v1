@@ -23,7 +23,9 @@ const SeriesStreamSchema = new mongoose.Schema({
   episode_run_time: String,
   category_id: { type: String, index: true },
   category_ids: [Number],
-  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true }
+  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true },
+  hide: { type: Boolean, default: false, index: true },
+  favorite: { type: Boolean, default: false, index: true }
 }, { timestamps: true });
 
 SeriesStreamSchema.index({ provider: 1, series_id: 1 }, { unique: true });

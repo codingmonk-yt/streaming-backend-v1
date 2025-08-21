@@ -17,7 +17,9 @@ const VodStreamSchema = new mongoose.Schema({
   container_extension: String,
   custom_sid: String,
   direct_source: String,
-  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true }
+  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', index: true },
+  hide: { type: Boolean, default: false, index: true },
+  favorite: { type: Boolean, default: false, index: true }
 }, { timestamps: true });
 
 VodStreamSchema.index({ provider: 1, stream_id: 1 }, { unique: true });

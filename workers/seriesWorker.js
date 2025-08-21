@@ -2,13 +2,13 @@ const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const SeriesStream = require('../src/models/SeriesStream');
-const Provider = require('../src/models/Provider');
-const { ExcludeSeriesCategories } = require('../src/util/excludeCategories');
+const SeriesStream = require('../models/SeriesStream');
+const Provider = require('../models/Provider');
+const { ExcludeSeriesCategories } = require('../util/excludeCategories');
 
 require('dotenv').config();
 
-mongoose.connect(process.env.URL, {
+mongoose.connect(process.env.MONGO_URI, {
   maxPoolSize: 20,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,

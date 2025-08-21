@@ -2,13 +2,13 @@ const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const VodStream = require('../src/models/VodStream');
-const Provider = require('../src/models/Provider');
-const { ExcludeVodCategories } = require('../src/util/excludeCategories');
+const VodStream = require('../models/VodStream');
+const Provider = require('../models/Provider');
+const { ExcludeVodCategories } = require('../util/excludeCategories');
 
 require('dotenv').config();
 
-mongoose.connect(process.env.URL, {
+mongoose.connect(process.env.MONGO_URI, {
   maxPoolSize: 20,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
@@ -70,7 +70,7 @@ const worker = new Worker(
       return true;
     });
 
-    // Upsert into database (Do NOT save credentials/dns)
+    // Upsert into database (do NOT save credentials/dns)
     const upserts = filtered.map(item => ({
       updateOne: {
         filter: { provider: provider._id, stream_id: item.stream_id },
