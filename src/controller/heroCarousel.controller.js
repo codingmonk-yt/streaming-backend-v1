@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const HeroSection = require('../models/HeroSection');
+const HeroSection = require('../models/HeroCarousel');
 
 /**
  * Create a new hero section

@@ -24,7 +24,10 @@ app.use('/api/categories', require('./src/routes/category.routes'));
 app.use('/api/lives', require('./src/routes/live.routes'));
 app.use('/api/series', require('./src/routes/series.routes'));
 app.use('/api/sections', require('./src/routes/section.routes'));
-
+// Mount hero carousel routes at /api/herosections to match controller and frontend
+app.use('/api/herosections', require('./src/routes/heroSection.routes'));
+// Backwards-compatible alias: some clients may still request the old path
+app.use('/api/heroscarousels', require('./src/routes/heroSection.routes'));
 // Health
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 app.use(cors({
