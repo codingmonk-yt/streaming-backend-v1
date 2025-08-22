@@ -64,7 +64,8 @@ exports.getHeroscarousels = async (req, res) => {
 
     return res.status(200).json({ success: true, count: heroSections.length, data: heroSections });
   } catch (error) {
-    return res.status(500).json({ success: false, error: 'Server Error' });
+  console.error('getHeroscarousels error:', error);
+  return res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
 
@@ -81,7 +82,8 @@ exports.getHeroscarousel = async (req, res) => {
     }
     return res.status(200).json({ success: true, data: hero });
   } catch (error) {
-    if (error.kind === 'ObjectId') {
+  console.error('getHeroscarousel error:', error);
+  if (error.kind === 'ObjectId') {
       return res.status(404).json({ success: false, error: 'HeroSection not found' });
     }
     return res.status(500).json({ success: false, error: 'Server Error' });
@@ -123,7 +125,8 @@ exports.updateHeroscarousel = async (req, res) => {
 
     return res.status(200).json({ success: true, data: hero, message: 'HeroSection updated successfully' });
   } catch (error) {
-    if (error.name === 'ValidationError') {
+  console.error('updateHeroscarousel error:', error);
+  if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({ success: false, error: messages });
     }
@@ -148,7 +151,8 @@ exports.deleteHeroscarousel = async (req, res) => {
 
     return res.status(200).json({ success: true, message: 'HeroSection deleted successfully' });
   } catch (error) {
-    if (error.kind === 'ObjectId') {
+  console.error('deleteHeroscarousel error:', error);
+  if (error.kind === 'ObjectId') {
       return res.status(404).json({ success: false, error: 'HeroSection not found' });
     }
 
