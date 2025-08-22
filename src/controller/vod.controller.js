@@ -118,9 +118,62 @@ async function setVodHide(req, res) {
   }
 }
 
+// Public API for getting movies with pagination
+async function getPublicMovies(req, res) {
+  try {
+    const { search, category_id, feature, page = 1, limit = 10 } = req.query;
+    const query = {
+      // Only show active content to public users
+      status: { $ne: 'HIDDEN' }
+    };
+
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (feature !== undefined) query.feature = feature === 'true';
+    if (category_id) query.category_id = category_id;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const totalItems = await VodStream.countDocuments(query);
+    const streams = await VodStream.find(query)
+      .skip(skip)
+      .limit(limitNum)
+      .sort({ updatedAt: -1 });
+
+    const totalPages = Math.ceil(totalItems / limitNum);
+
+    res.json({
+      streams,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: pageNum,
+        pageSize: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
+      },
+      filters: {
+        search,
+        category_id,
+        feature
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
 module.exports = {
   syncAndGetVodStreams,
   getAllSavedVodStreams,
   setVodFeature,
-  setVodHide
+  setVodHide,
+  getPublicMovies
 };

@@ -3,10 +3,14 @@ const {
   syncAndGetVodStreams,
   getAllSavedVodStreams,
   setVodFeature,
-  setVodHide
+  setVodHide,
+  getPublicMovies
 } = require('../controller/vod.controller');
 const router = express.Router();
 const { authenticate } = require('../middlewares/auth');
+
+// Public endpoint to get movies with pagination (no auth required)
+router.get('/public', getPublicMovies);
 
 // Sync and upsert VOD
 router.get('/sync/:providerId', authenticate, syncAndGetVodStreams);
