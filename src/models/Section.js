@@ -62,7 +62,7 @@ const sectionSchema = new mongoose.Schema({
 });
 
 // Simple index for better performance
-sectionSchema.index({ sectionId: 1 }, { unique: true });
+// Removed duplicate index on sectionId since it's already defined with unique: true in the schema
 sectionSchema.index({ sortOrder: 1 });
 
 // Auto-generate sectionId from title if not provided

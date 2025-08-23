@@ -28,6 +28,10 @@ app.use('/api/sections', require('./src/routes/section.routes'));
 app.use('/api/herosections', require('./src/routes/heroSection.routes'));
 // Backwards-compatible alias: some clients may still request the old path
 app.use('/api/heroscarousels', require('./src/routes/heroSection.routes'));
+
+// Public Routes - no auth middleware needed
+app.use('/api/public', require('./src/routes/public.routes'));
+
 // Health
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 app.use(cors({

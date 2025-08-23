@@ -2,9 +2,9 @@ const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const LiveStream = require('../models/LiveStream');
+const SeriesStream = require('../models/SeriesStream');
 const Provider = require('../models/Provider');
-const { ExcludeLiveCategories } = require('../util/excludeCategories');
+const { ExcludeSeriesCategories, normalizeCategory } = require('../util/excludeCategories');
 
 require('dotenv').config();
 
@@ -13,14 +13,15 @@ mongoose.connect(process.env.MONGO_URI, {
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
 });
+
 mongoose.connection.on('connected', () =>
-  console.log('✅ Worker: Connected to MongoDB:', mongoose.connection.db.databaseName)
-);
-mongoose.connection.on('error', (err) =>
-  console.error('❌ Worker: MongoDB connection error:', err)
+  console.log('✅ Series Worker: Connected to MongoDB:', mongoose.connection.db.databaseName)
 );
 
-// Redis connection
+mongoose.connection.on('error', (err) =>
+  console.error('❌ Series Worker: MongoDB connection error:', err)
+);
+
 const connection = new IORedis(process.env.REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
@@ -32,7 +33,7 @@ const connection = new IORedis(process.env.REDIS_URL, {
 });
 
 const worker = new Worker(
-  "live-sync",
+  "series-sync",
   async (job) => {
     const { providerId } = job.data;
     if (!mongoose.Types.ObjectId.isValid(providerId))
@@ -52,27 +53,36 @@ const worker = new Worker(
       throw new Error("Missing required provider credentials");
     }
 
-    // Fetch streams
-    const apiUrl = `${dns.replace(/\/$/, '')}/player_api.php?username=${username}&password=${password}&action=get_live_streams`;
-    const liveStreams = await axios.get(apiUrl, { timeout: 20000 }).then(r => r.data);
+    // Fetch series streams
+    const apiUrl = `${dns.replace(/\/$/, '')}/player_api.php?username=${username}&password=${password}&action=get_series`;
+    const seriesStreams = await axios.get(apiUrl, { timeout: 20000 }).then(r => r.data);
 
-    if (!Array.isArray(liveStreams))
-      throw new Error("API did not return an array of live streams");
+    if (!Array.isArray(seriesStreams))
+      throw new Error("API did not return an array of series streams");
 
     // Filter excluded categories
-    const filtered = liveStreams.filter(stream => {
-      if (stream.category_id && ExcludeLiveCategories.includes(String(stream.category_id))) return false;
-      if (
-        stream.category_ids &&
-        stream.category_ids.some(cid => ExcludeLiveCategories.includes(String(cid)))
-      ) return false;
+    const filtered = seriesStreams.filter(series => {
+      // Normalize the category_id by removing leading zeros
+      const normalizedCategoryId = normalizeCategory(series.category_id);
+      
+      // Check if the normalized category ID is in the exclude list
+      if (normalizedCategoryId && ExcludeSeriesCategories.includes(normalizedCategoryId)) return false;
+      
+      // Check category_ids array if it exists
+      if (series.category_ids && Array.isArray(series.category_ids)) {
+        // Check if any normalized category ID in the array is in the exclude list
+        if (series.category_ids.some(cid => ExcludeSeriesCategories.includes(normalizeCategory(cid)))) {
+          return false;
+        }
+      }
+      
       return true;
     });
 
-    // Upsert into database (don't store credentials/dns)
+    // Upsert into database (Do NOT save credentials/dns)
     const upserts = filtered.map(item => ({
       updateOne: {
-        filter: { provider: provider._id, stream_id: item.stream_id },
+        filter: { provider: provider._id, series_id: item.series_id },
         update: {
           ...item,
           provider: provider._id,
@@ -83,24 +93,23 @@ const worker = new Worker(
     }));
 
     if (upserts.length) {
-      await LiveStream.bulkWrite(upserts, { ordered: false });
+      await SeriesStream.bulkWrite(upserts, { ordered: false });
     }
     return { success: true, total: upserts.length };
   },
   { connection }
 );
 
-// Worker Events
 worker.on('completed', job => {
-  console.log(`✅ Live stream sync job completed for provider=${job.data.providerId}:`, job.returnvalue);
+  console.log(`✅ Series sync job completed for provider=${job.data.providerId}:`, job.returnvalue);
 });
 worker.on('failed', (job, err) => {
-  console.error(`❌ Live stream sync job failed for provider=${job?.data?.providerId}: ${err?.message}`);
+  console.error(`❌ Series sync job failed for provider=${job?.data?.providerId}: ${err?.message}`);
 });
 worker.on('error', err => {
-  console.error('❌ Worker error:', err.message);
+  console.error('❌ Series Worker error:', err.message);
 });
 
-console.log('🚀 Live stream worker started and waiting for jobs...');
+console.log('🚀 Series worker started and waiting for jobs...');
 
 module.exports = worker;
