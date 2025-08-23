@@ -2,6 +2,7 @@ const HeroSection = require('../models/HeroCarousel');
 const Provider = require('../models/Provider');
 const VodStream = require('../models/VodStream');
 const Section = require('../models/Section');
+const Category = require('../models/Category');
 const mongoose = require('mongoose');
 const axios = require('axios');
 
@@ -200,51 +201,46 @@ async function getMovieById(req, res) {
       });
     }
 
-    // If flag is true, movie has complete information - return it directly
-    if (movie.flag === true) {
-      return res.status(200).json({
-        success: true,
-        data: movie
-      });
-    }
-
+    let updatedMovie = movie;
+    
     // If flag is false, we need to fetch additional information
-    try {
-      // Get the provider for this movie
-      const providerId = movie.provider;
-      const provider = await Provider.findById(providerId);
-      
-      if (!provider || provider.status !== 'Active') {
-        return res.status(404).json({
-          success: false,
-          error: 'Provider not found or not active'
-        });
-      }
-
-      console.log(`Processing movie: ${movie.name || movie.title} from provider: ${provider.name}`);
-      
-      // Get authentication credentials from provider endpoint
-      let username, password;
-      
+    if (movie.flag !== true) {
       try {
-        const authResponse = await axios.post(provider.apiEndpoint, {});
-        username = authResponse.data.username;
-        password = authResponse.data.password;
-
-        if (!username || !password) {
-          console.warn(`Invalid auth response from provider ${provider.name}: missing credentials`);
-          return res.status(500).json({
+        // Get the provider for this movie
+        const providerId = movie.provider;
+        const provider = await Provider.findById(providerId);
+        
+        if (!provider || provider.status !== 'Active') {
+          return res.status(404).json({
             success: false,
-            error: 'Failed to get provider authentication credentials'
+            error: 'Provider not found or not active'
           });
         }
-      } catch (authError) {
-        console.error(`Authentication error for provider ${provider.name}:`, authError.message);
-        return res.status(500).json({
-          success: false,
-          error: 'Provider authentication failed'
-        });
-      }
+
+        console.log(`Processing movie: ${movie.name || movie.title} from provider: ${provider.name}`);
+        
+        // Get authentication credentials from provider endpoint
+        let username, password;
+        
+        try {
+          const authResponse = await axios.post(provider.apiEndpoint, {});
+          username = authResponse.data.username;
+          password = authResponse.data.password;
+
+          if (!username || !password) {
+            console.warn(`Invalid auth response from provider ${provider.name}: missing credentials`);
+            return res.status(500).json({
+              success: false,
+              error: 'Failed to get provider authentication credentials'
+            });
+          }
+        } catch (authError) {
+          console.error(`Authentication error for provider ${provider.name}:`, authError.message);
+          return res.status(500).json({
+            success: false,
+            error: 'Provider authentication failed'
+          });
+        }
 
       // Get the stream ID from the movie
       const streamId = movie.stream_id;
@@ -265,7 +261,7 @@ async function getMovieById(req, res) {
         }
         
         // Update movie with fetched data and set flag to true
-        const updatedMovie = await VodStream.findByIdAndUpdate(
+        updatedMovie = await VodStream.findByIdAndUpdate(
           id,
           { 
             ...vodResponse.data.info, 
@@ -273,11 +269,6 @@ async function getMovieById(req, res) {
           },
           { new: true }
         );
-
-        return res.status(200).json({
-          success: true,
-          data: updatedMovie
-        });
       } catch (vodError) {
         console.error(`Error fetching VOD details for stream ${streamId}:`, vodError.message);
         return res.status(500).json({
@@ -293,6 +284,61 @@ async function getMovieById(req, res) {
         message: error.message
       });
     }
+  }
+
+  // Get similar movies based on category_ids
+  let similarMovies = [];
+  
+  // Determine which category IDs to use
+  const categoryIds = [];
+  
+  // Check for category_id
+  if (updatedMovie.category_id) {
+    categoryIds.push(updatedMovie.category_id);
+  }
+  
+  // Check for category_ids array
+  if (updatedMovie.category_ids && Array.isArray(updatedMovie.category_ids) && updatedMovie.category_ids.length > 0) {
+    // Convert numbers to strings if needed
+    const stringCategoryIds = updatedMovie.category_ids.map(id => id.toString());
+    categoryIds.push(...stringCategoryIds);
+  }
+  
+  // If we have category IDs, get similar movies
+  if (categoryIds.length > 0) {
+    try {
+      // For each category ID, get up to 5 similar movies
+      const similarMoviesPromises = categoryIds.map(async (categoryId) => {
+        const moviesInCategory = await VodStream.aggregate([
+          { 
+            $match: { 
+              category_id: categoryId.toString(),
+              _id: { $ne: mongoose.Types.ObjectId(id) }, // Exclude the current movie
+              status: { $ne: 'HIDDEN' }
+            } 
+          },
+          { $sample: { size: 5 } }  // Get 5 random movies
+        ]);
+        
+        return {
+          category_id: categoryId,
+          movies: moviesInCategory
+        };
+      });
+      
+      // Wait for all queries to complete
+      similarMovies = await Promise.all(similarMoviesPromises);
+    } catch (error) {
+      console.error('Error fetching similar movies:', error);
+      // We'll continue even if there's an error getting similar movies
+    }
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: updatedMovie,
+    similarMovies
+  });
   } catch (error) {
     console.error('Error in getMovieById:', error);
     return res.status(500).json({
@@ -365,6 +411,7 @@ async function getStreamUrl(req, res) {
   }
 }
 async function getSectionsWithMovies(req, res) {
+
   try {
     // 1. Get all active sections
     const sections = await Section.find({ active: true }).sort({ sortOrder: 1 });
@@ -408,6 +455,8 @@ async function getSectionsWithMovies(req, res) {
                 status: { $ne: 'HIDDEN' },
               } 
             },
+            // Randomize the results
+            { $sample: { size: 5 } }
           ]);
           console.log(`Found ${moviesForCategory.length} movies for category ID: ${categoryId}`);
           // Add to our collection
@@ -444,10 +493,60 @@ async function getSectionsWithMovies(req, res) {
     });
   }
 }
+async function getCategoriesByType(req, res) {
+  try {
+    const { content_type } = req.params;
+    
+    // Validate content_type
+    const validContentTypes = ['VOD', 'series', 'live'];
+    if (!validContentTypes.includes(content_type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid content type. Must be one of: VOD, series, live'
+      });
+    }
+
+    // Find all categories with the specified content_type that are not blacklisted
+    const categories = await Category.find({ 
+      category_type: content_type,
+      blacklisted: false
+    }).sort({ category_name: 1 });
+
+    // Group categories by parent_id
+    const parentCategories = categories.filter(cat => cat.parent_id === null);
+    const childCategories = categories.filter(cat => cat.parent_id !== null);
+
+    // Create a hierarchy structure
+    const categoryHierarchy = parentCategories.map(parent => {
+      const children = childCategories.filter(child => 
+        child.parent_id === parent.category_id
+      );
+      
+      return {
+        ...parent.toObject(),
+        children: children.map(child => child.toObject())
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: categoryHierarchy.length,
+      data: categoryHierarchy
+    });
+  } catch (error) {
+    console.error('Error in getCategoriesByType:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server Error',
+      message: error.message
+    });
+  }
+}
 
 module.exports = {
   getProcessedHeroCarousel,
   getMovieById,
   getStreamUrl,
-  getSectionsWithMovies
+  getSectionsWithMovies,
+  getCategoriesByType
 };
