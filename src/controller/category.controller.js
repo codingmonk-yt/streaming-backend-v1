@@ -437,11 +437,16 @@ async function getRootCategories(req, res) {
  */
 async function getCategoryNamesByType(req, res) {
   try {
-    const { category_type } = req.query;
+    let { category_type } = req.query;
     
     // Validate category_type is provided
     if (!category_type) {
       return res.status(400).json({ message: 'category_type is required' });
+    }
+    
+    // Replace "Movies" with "VOD" if client sends "Movies"
+    if (category_type === 'Movies') {
+      category_type = 'VOD';
     }
     
     // Build query object with just the category_type
