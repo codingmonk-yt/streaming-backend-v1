@@ -1,6 +1,7 @@
 const HeroSection = require('../models/HeroCarousel');
 const Provider = require('../models/Provider');
 const VodStream = require('../models/VodStream');
+const mongoose = require('mongoose');
 const axios = require('axios');
 
 /**
@@ -182,6 +183,137 @@ async function getProcessedHeroCarousel(req, res) {
   }
 }
 
+/**
+ * Get movie by ID with complete information
+ * @route GET /api/public/movies/:id
+ * @access Public
+ */
+async function getMovieById(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Check if ID is valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid movie ID format'
+      });
+    }
+
+    // Find the movie by ID
+    const movie = await VodStream.findById(id);
+    
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        error: 'Movie not found'
+      });
+    }
+
+    // If flag is true, movie has complete information - return it directly
+    if (movie.flag === true) {
+      return res.status(200).json({
+        success: true,
+        data: movie
+      });
+    }
+
+    // If flag is false, we need to fetch additional information
+    try {
+      // Get the provider for this movie
+      const providerId = movie.provider;
+      const provider = await Provider.findById(providerId);
+      
+      if (!provider || provider.status !== 'Active') {
+        return res.status(404).json({
+          success: false,
+          error: 'Provider not found or not active'
+        });
+      }
+
+      console.log(`Processing movie: ${movie.name || movie.title} from provider: ${provider.name}`);
+      
+      // Get authentication credentials from provider endpoint
+      let username, password;
+      
+      try {
+        const authResponse = await axios.post(provider.apiEndpoint, {});
+        username = authResponse.data.username;
+        password = authResponse.data.password;
+
+        if (!username || !password) {
+          console.warn(`Invalid auth response from provider ${provider.name}: missing credentials`);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to get provider authentication credentials'
+          });
+        }
+      } catch (authError) {
+        console.error(`Authentication error for provider ${provider.name}:`, authError.message);
+        return res.status(500).json({
+          success: false,
+          error: 'Provider authentication failed'
+        });
+      }
+
+      // Get the stream ID from the movie
+      const streamId = movie.stream_id;
+      
+      // Fetch VOD details using provider DNS and credentials
+      const vodUrl = `${provider.dns}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${streamId}`;
+      
+      console.log(`Fetching VOD details for stream ${streamId}`);
+      
+      try {
+        const vodResponse = await axios.get(vodUrl);
+        
+        if (!vodResponse.data) {
+          return res.status(500).json({
+            success: false,
+            error: 'No data returned from provider API'
+          });
+        }
+        
+        // Update movie with fetched data and set flag to true
+        const updatedMovie = await VodStream.findByIdAndUpdate(
+          id,
+          { 
+            ...vodResponse.data.info, 
+            flag: true 
+          },
+          { new: true }
+        );
+
+        return res.status(200).json({
+          success: true,
+          data: updatedMovie
+        });
+      } catch (vodError) {
+        console.error(`Error fetching VOD details for stream ${streamId}:`, vodError.message);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch movie details from provider'
+        });
+      }
+    } catch (error) {
+      console.error(`Error processing movie ${id}:`, error.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Server Error',
+        message: error.message
+      });
+    }
+  } catch (error) {
+    console.error('Error in getMovieById:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server Error',
+      message: error.message
+    });
+  }
+}
+
 module.exports = {
-  getProcessedHeroCarousel
+  getProcessedHeroCarousel,
+  getMovieById
 };
