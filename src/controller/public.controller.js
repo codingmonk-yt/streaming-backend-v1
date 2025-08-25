@@ -1,6 +1,7 @@
 const HeroSection = require('../models/HeroCarousel');
 const Provider = require('../models/Provider');
 const VodStream = require('../models/VodStream');
+const LiveStream = require('../models/LiveStream');
 const Section = require('../models/Section');
 const Category = require('../models/Category');
 const mongoose = require('mongoose');
@@ -413,8 +414,14 @@ async function getStreamUrl(req, res) {
 async function getSectionsWithMovies(req, res) {
 
   try {
-    // 1. Get all active sections
-    const sections = await Section.find({ active: true }).sort({ sortOrder: 1 });
+    console.log('Fetching sections with Movies content type');
+    // 1. Get all active sections with content type "Movies" (exact match, case-sensitive)
+    const sections = await Section.find({ 
+      active: true,
+      contentType: 'Movies'  // Using exact match for content type
+    }).sort({ sortOrder: 1 });
+    
+    console.log(`Found ${sections.length} movie sections`);
     
     if (!sections.length) {
       return res.status(200).json({
@@ -479,6 +486,7 @@ async function getSectionsWithMovies(req, res) {
       };
     }));
 
+    console.log(`Returning ${sectionsWithMovies.length} processed movie sections`);
     return res.status(200).json({
       success: true,
       count: sectionsWithMovies.length,
@@ -542,11 +550,185 @@ async function getCategoriesByType(req, res) {
     });
   }
 }
+async function getSectionswithLiveTv(req, res) {
+  try {
+    // Fetch sections where contentType matches 'live tv' (case-insensitive) and active
+    const sections = await Section.find({ active: true, contentType: /live\s*tv/i }).sort({ sortOrder: 1 });
 
+    if (!sections.length) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const sectionsWithLive = await Promise.all(sections.map(async (section) => {
+      // If no selected categories, return empty categoryMovies
+      if (!section.selectedCategoryIds || section.selectedCategoryIds.length === 0) {
+        return { ...section.toObject(), categoryMovies: [] };
+      }
+
+      // Normalize category IDs to strings
+      const normalizedCategoryIds = section.selectedCategoryIds.map(id => parseInt(id, 10).toString());
+
+      const categoryMovies = [];
+
+      for (const categoryId of normalizedCategoryIds) {
+        try {
+          const movies = await LiveStream.aggregate([
+            { $match: { category_id: categoryId, status: { $ne: 'HIDDEN' } } },
+            { $sample: { size: 5 } }
+          ]);
+
+          if (movies && movies.length > 0) {
+            categoryMovies.push({ category_id: categoryId, movies });
+          }
+        } catch (err) {
+          console.error(`Error fetching live streams for category ${categoryId}:`, err.message);
+        }
+      }
+
+      return { ...section.toObject(), categoryMovies };
+    }));
+
+    return res.status(200).json({ success: true, count: sectionsWithLive.length, data: sectionsWithLive });
+  } catch (error) {
+    console.error('Error in getSectionswithLiveTv:', error);
+    return res.status(500).json({ success: false, error: 'Server Error', message: error.message });
+  }
+}
+async function getAllLiveTvS(req, res) {
+  try {
+    const { search, category_id, provider, status, feature, page = 1, limit = 10, hide } = req.query;
+    const query = {};
+
+    // provider may be an ObjectId
+    if (provider && /^[0-9a-fA-F]{24}$/.test(provider)) query.provider = provider;
+    if (category_id) query.category_id = category_id;
+    if (status) query.status = String(status).toUpperCase();
+    if (feature !== undefined) query.feature = feature === 'true' || feature === true;
+
+    // hide handling: if hide=true -> only HIDDEN, if hide=false -> exclude HIDDEN
+    if (hide === 'true') {
+      query.status = 'HIDDEN';
+    } else if (hide === 'false') {
+      query.status = { $ne: 'HIDDEN' };
+    }
+
+    if (search) {
+      const regex = new RegExp(String(search), 'i');
+      query.$or = [
+        { name: regex },
+        { title: regex }
+      ];
+    }
+
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const totalItems = await LiveStream.countDocuments(query);
+    const streams = await LiveStream.find(query)
+      .skip(skip)
+      .limit(limitNum)
+      .sort({ updatedAt: -1 });
+
+    const totalPages = Math.ceil(totalItems / limitNum);
+    return res.status(200).json({
+      streams,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: pageNum,
+        pageSize: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
+      },
+      filters: { search, category_id, provider, status, hide, feature }
+    });
+  } catch (err) {
+    console.error('Error in getAllLiveTvS:', err);
+    return res.status(500).json({ success: false, error: 'Server Error', message: err.message });
+  }
+}
+async function getLiveStreamUrl(req, res) {
+  try {
+    const { providerId, streamId } = req.params;
+
+    if (!providerId || !/^[0-9a-fA-F]{24}$/.test(providerId)) {
+      return res.status(400).json({ success: false, error: 'Invalid provider ID format' });
+    }
+
+    const provider = await Provider.findById(providerId);
+    if (!provider || provider.status !== 'Active') {
+      return res.status(404).json({ success: false, error: 'Provider not found or not active' });
+    }
+
+    // Obtain credentials from provider endpoint
+    let username, password;
+    try {
+      const authResponse = await axios.post(provider.apiEndpoint, {});
+      username = authResponse.data?.username;
+      password = authResponse.data?.password;
+    } catch (authErr) {
+      console.error(`Auth error for provider ${providerId}:`, authErr.message);
+      return res.status(500).json({ success: false, error: 'Failed to get provider credentials' });
+    }
+
+    if (!username || !password) {
+      console.warn(`Missing credentials from provider ${provider._id}`);
+      return res.status(500).json({ success: false, error: 'Provider did not return credentials' });
+    }
+
+    // Try .m3u8 then .ts
+    const base = provider.dns.replace(/\/$/, '');
+    const candidates = [
+      `${base}/live/${username}/${password}/${streamId}.m3u8`,
+      `${base}/live/${username}/${password}/${streamId}.ts`
+    ];
+
+    for (const url of candidates) {
+      try {
+        // For m3u8 expect text; for ts expect binary. Use a short timeout and only read headers/body start.
+        const isM3u8 = url.endsWith('.m3u8');
+        const resp = await axios.get(url, {
+          timeout: 5000,
+          responseType: isM3u8 ? 'text' : 'arraybuffer',
+          maxRedirects: 3,
+          validateStatus: status => status < 400
+        });
+
+        if (resp.status === 200) {
+          const contentType = (resp.headers['content-type'] || '').toLowerCase();
+
+          if (isM3u8) {
+            const body = typeof resp.data === 'string' ? resp.data : '';
+            if (body.startsWith('#EXTM3U') || contentType.includes('mpegurl') || contentType.includes('vnd.apple.mpegurl')) {
+              return res.status(200).json({ success: true, streamUrl: url, type: 'm3u8' });
+            }
+          } else {
+            // TS segment or direct transport stream
+            if (contentType.includes('video/') || (resp.data && resp.data.byteLength > 0)) {
+              return res.status(200).json({ success: true, streamUrl: url, type: 'ts' });
+            }
+          }
+        }
+      } catch (err) {
+        // Try next candidate
+        console.warn(`Candidate URL failed: ${url} -> ${err.message}`);
+      }
+    }
+
+    return res.status(404).json({ success: false, error: 'Stream not available / Not streaming now' });
+  } catch (error) {
+    console.error('Error in getLiveStreamUrl:', error);
+    return res.status(500).json({ success: false, error: 'Server Error', message: error.message });
+  }
+}
 module.exports = {
   getProcessedHeroCarousel,
   getMovieById,
   getStreamUrl,
   getSectionsWithMovies,
-  getCategoriesByType
-};
+  getCategoriesByType,
+  getSectionswithLiveTv,
+  getAllLiveTvS,
+  getLiveStreamUrl
+}
