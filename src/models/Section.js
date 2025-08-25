@@ -4,7 +4,6 @@ const sectionSchema = new mongoose.Schema({
   sectionId: {
     type: String,
     required: [true, 'Section ID is required'],
-    unique: true,
     trim: true,
     lowercase: true,
     match: [/^[a-z0-9-_]+$/, 'Section ID can only contain lowercase letters, numbers, hyphens, and underscores']
@@ -61,8 +60,11 @@ const sectionSchema = new mongoose.Schema({
   timestamps: true // Adds createdAt and updatedAt
 });
 
-// Simple index for better performance
-// Removed duplicate index on sectionId since it's already defined with unique: true in the schema
+// Compound index for uniqueness on sectionId+contentType combination
+// This allows sections with same sectionId but different contentType
+sectionSchema.index({ sectionId: 1, contentType: 1 }, { unique: true });
+
+// Index for better performance when sorting
 sectionSchema.index({ sortOrder: 1 });
 
 // Auto-generate sectionId from title if not provided

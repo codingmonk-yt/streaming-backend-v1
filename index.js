@@ -10,7 +10,13 @@ const connectDB = require('./src/config/db');
 const app = express();
 
 // Middleware
-app.use(cors({ origin: true, credentials: true }));
+// Configure CORS properly - use this single configuration instead of multiple ones
+app.use(cors({
+  origin: "*", // Allow all origins
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
 app.use(express.json());
 app.use(morgan('dev'));
 
@@ -32,13 +38,8 @@ app.use('/api/heroscarousels', require('./src/routes/heroSection.routes'));
 // Public Routes - no auth middleware needed
 app.use('/api/public', require('./src/routes/public.routes'));
 
-// Health
+// Health check endpoint
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
-app.use(cors({
-  origin: "*", // ✅ Allow all origins
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
 
 // Boot
 const PORT = process.env.PORT;

@@ -32,16 +32,6 @@ router.get(
   ctrl.getSyncJobStatus
 );
 
-// --- Category CRUD Endpoints ---
-
-// CREATE category
-router.post(
-  '/',
-  authenticate,
-  validateCreateCategory,
-  ctrl.createCategory
-);
-
 // LIST/SEARCH categories (by providerId, category_type, etc.)
 router.get(
   '/',
@@ -63,7 +53,7 @@ router.get(
   ctrl.getCategoryNamesByType
 );
 
-// GET category by 4-digit category_id
+// GET category by 3-digit category_id
 router.get(
   '/by-category-id/:category_id',
   authenticate,

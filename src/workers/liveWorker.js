@@ -8,7 +8,7 @@ const { ExcludeLiveCategories, normalizeCategory } = require('../util/excludeCat
 
 require('dotenv').config();
 
-mongoose.connect(process.env.MONGO_URI, {
+mongoose.connect(process.env.URL, {
   maxPoolSize: 20,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
